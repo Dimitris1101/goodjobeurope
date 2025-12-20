@@ -1,12 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
+// ---------- Generator & Datasource ----------
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -14,3 +8,486 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ---------- Enums ----------
+enum Role {
+  ADMIN
+  COMPANY
+  CANDIDATE
+}
+
+enum AppStatus {
+  SUBMITTED
+  REVIEWING
+  REJECTED
+  ACCEPTED
+}
+
+enum CompanyPlan {
+  SIMPLE
+  SILVER
+  GOLDEN
+}
+
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum JobWorkMode {
+  ONSITE
+  REMOTE
+  HYBRID
+}
+
+enum SwipeDecision {
+  LIKE
+  PASS
+}
+
+enum MatchStatus {
+  PENDING
+  ACCEPTED // όταν η εταιρεία πατήσει "Like & Message"
+  REJECTED
+}
+
+enum JobSector {
+  IT
+  SALES
+  ADMIN
+  LOGISTICS
+  FINANCE
+  MARKETING
+  FOOD
+  TOURISM
+  GENERAL_WORKERS
+  OTHER
+}
+
+enum InvoiceStatus {
+  PENDING_UPLOAD
+  COMPLETED
+  FAILED
+}
+
+enum InvoiceSeries {
+  TPY // Τιμολόγιο Παροχής Υπηρεσιών
+  APY // Απόδειξη Παροχής Υπηρεσιών
+  TPY_EE // ΤΠΥ Ενδοκοινοτική
+  TPY_TX // ΤΠΥ Τρίτων Χωρών
+}
+
+enum VatProfile {
+  VAT24 // 24% ΦΠΑ
+  VAT0_EE // 0% ενδοκοινοτικό (άρθρο απαλλαγής 33 κτλ)
+  VAT0_TX // 0% τρίτων χωρών (άρθρο απαλλαγής 29 κτλ)
+}
+
+enum SubscriptionStatus {
+  active
+  past_due
+  unpaid
+  canceled
+}
+
+
+// ---------- Core Models ----------
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String?
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  name         String?
+
+  company       Company?
+  candidate     Candidate?
+  resetTokens   PasswordResetToken[]
+  subscriptions Subscription[]
+  emailTokens   EmailVerificationToken[]
+  emailVerified Boolean                  @default(false)
+  invoices      Invoice[]                @relation("UserInvoices")
+
+  @@index([role])
+}
+
+model EmailVerificationToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Company {
+  id               Int         @id @default(autoincrement())
+  userId           Int         @unique
+  name             String
+  country          String?
+  website          String?
+  about            String?
+  phone            String?
+  heading          String?
+  address          String?
+  logoUrl          String?
+  coverUrl         String?
+  profileCompleted Boolean     @default(false)
+  plan             CompanyPlan @default(SIMPLE)
+  jobLimitOverride Int?
+
+  user User  @relation(fields: [userId], references: [id])
+  jobs Job[]
+}
+
+model Candidate {
+  id                  Int       @id @default(autoincrement())
+  userId              Int       @unique
+  name                String
+  location            String?
+  headline            String?
+  profileCompleted    Boolean   @default(false)
+  firstName           String?
+  lastName            String?
+  birthDate           DateTime?
+  degree              Boolean?
+  degreeTitle         String?
+  phone               String?
+  about               String?
+  education           String?
+  experience          String?
+  volunteering        String?
+  cvUrl               String?
+  skillsText          String?
+  avatarUrl           String?
+  gender              String?
+  countryOfOrigin     String?
+  driverLicenseA      Boolean?
+  driverLicenseM      Boolean?
+  referenceLetterUrl  String?
+  preferredLanguage   String?
+  locationPlaceId     String?
+  locationLat         Float?
+  locationLng         Float?
+  locationCity        String?
+  locationAdmin       String?
+  locationCountryCode String? // ISO-2 (π.χ. DE)
+  locationCountryName String?
+  locationText        String? // full formatted address (για εμφάνιση)
+
+  user          User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  swipes        JobSwipe[]
+  languages     CandidateLanguage[]
+  skills        CandidateSkill[]
+  apps          Application[]
+  locationPrefs CandidateLocationPreference[] @relation("CandidateLocationPrefs")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // index για γεω-queries
+  @@index([locationLat, locationLng])
+  @@index([locationPlaceId])
+}
+
+model CandidateLanguage {
+  id          Int       @id @default(autoincrement())
+  candidateId Int
+  name        String
+  level       String
+  Candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+}
+
+model Skill {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique
+  jobSkills       JobSkill[]
+  candidateSkills CandidateSkill[]
+
+  createdAt DateTime @default(now())
+}
+
+model Job {
+  id        Int     @id @default(autoincrement())
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  title               String
+  description         String
+  location            String?
+  status              JobStatus @default(PUBLISHED)
+  locationPlaceId     String?
+  locationLat         Float?
+  locationLng         Float?
+  locationCity        String?
+  locationAdmin       String?
+  locationCountryCode String?
+  locationCountryName String?
+  locationText        String?
+
+  // matching fields
+  workMode           JobWorkMode @default(ONSITE)
+  requireLicenseA    Boolean     @default(false)
+  requireLicenseM    Boolean     @default(false)
+  skills             String[]    @default([])
+  sector             JobSector?
+  sectorOtherText    String?
+  preferredLanguage  String?
+  preferredLangLevel String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // relations
+  jobSkills JobSkill[]
+  apps      Application[] // <-- κρατά το αν έχεις το model Application
+  swipes    JobSwipe[] // <-- back-relation προς JobSwipe
+
+  @@index([locationLat, locationLng])
+  @@index([locationCountryCode, locationCity])
+  @@index([companyId])
+  @@index([status, createdAt])
+}
+
+model JobSkill {
+  jobId   Int
+  skillId Int
+  level   Int @default(1) // 1–5
+
+  job   Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, skillId])
+  @@index([skillId])
+}
+
+model CandidateSkill {
+  candidateId Int
+  skillId     Int
+  level       Int @default(1)
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  skill     Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([candidateId, skillId])
+  @@index([skillId])
+}
+
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Application {
+  id          Int       @id @default(autoincrement())
+  jobId       Int
+  candidateId Int
+  status      AppStatus @default(SUBMITTED)
+  note        String?
+  createdAt   DateTime  @default(now())
+
+  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, candidateId])
+  @@index([status, createdAt])
+}
+
+model JobSwipe {
+  id            Int           @id @default(autoincrement())
+  candidateId   Int
+  jobId         Int
+  decision      SwipeDecision
+  createdAt     DateTime      @default(now())
+  companyRating Int?
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  // Κρατάμε το id σαν PK και κάνουμε το ζευγάρι μοναδικό
+  @@unique([candidateId, jobId], name: "candidateId_jobId")
+}
+
+// ---------- Billing / Tokens ----------
+model Plan {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique
+
+  // υπάρχοντα
+  adsEnabled Boolean  @default(true)
+  priceCents Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  // ✅ ΝΕΑ BENEFITS
+  adIntervalSec        Int      @default(20)   // 20 / 60 / 0
+  adMaxPerDay          Int?                    // 5 / 10 / null (unlimited)
+  companyAdsMax        Int?                    // 5 / 10 / null (unlimited)
+  companyMatchupsPerDay Int?                   // 5 / 15 / null (unlimited)
+  candidateLikesPerDay Int?                    // 10 / null (unlimited)
+  canUploadProfilePhoto Boolean @default(false)
+
+  subscriptions Subscription[]
+}
+
+model DailyUsage {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  day       String   // "YYYY-MM-DD"
+
+  companyMatchups Int @default(0)
+  candidateLikes  Int @default(0)
+  adsShown        Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, day])
+  @@index([userId, day])
+}
+
+model Subscription {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  planId    Int
+  status    SubscriptionStatus @default(active)
+  expiresAt DateTime?
+
+  stripeCustomerId     String?
+  stripeSubscriptionId String? @unique
+  cancelAtPeriodEnd    Boolean @default(false)
+  currentPeriodEnd     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([planId])
+  @@index([status])
+}
+
+model Match {
+  id          Int         @id @default(autoincrement())
+  jobId       Int
+  companyId   Int
+  candidateId Int
+  status      MatchStatus @default(PENDING) // PENDING, ACCEPTED, REJECTED
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  Conversation Conversation?
+}
+
+model Conversation {
+  id          Int      @id @default(autoincrement())
+  matchId     Int      @unique
+  companyId   Int
+  candidateId Int
+  createdAt   DateTime @default(now())
+
+  messages Message[]
+  match    Match     @relation(fields: [matchId], references: [id])
+
+  @@unique([companyId, candidateId])
+  @@index([companyId])
+  @@index([candidateId])
+}
+
+model Message {
+  id             Int       @id @default(autoincrement())
+  conversationId Int
+  senderUserId   Int
+  text           String
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+}
+
+model CandidateLocationPreference {
+  id          Int @id @default(autoincrement())
+  candidateId Int
+
+  placeId     String
+  text        String
+  city        String?
+  admin       String?
+  countryCode String?
+  countryName String?
+  lat         Float
+  lng         Float
+  priority    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  candidate Candidate @relation("CandidateLocationPrefs", fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, placeId])
+  @@index([candidateId])
+  @@index([countryCode, city])
+  @@index([lat, lng])
+}
+
+
+model InvoiceCounter {
+  id        Int          @id @default(autoincrement())
+  series    InvoiceSeries
+  year      Int
+  lastAa    Int          @default(0)
+  updatedAt DateTime     @updatedAt
+
+  @@unique([series, year])
+}
+
+// Model invoicing
+
+model Invoice {
+  id     String @id @default(cuid())
+  userId Int
+  user   User   @relation("UserInvoices", fields: [userId], references: [id])
+
+  stripeSessionId String @unique
+  stripeInvoiceId String?
+  amountCents     Int
+  currency        String
+  planCode        String
+  aa              Int?
+
+  status         InvoiceStatus @default(PENDING_UPLOAD)
+  providerId     String?
+  providerNumber String?
+  mydataMark     String?
+  pdfUrl         String?
+  retries        Int           @default(0)
+
+  series     InvoiceSeries @default(TPY)
+  invoiceNumber   Int      @default(0)
+  vatProfile VatProfile    @default(VAT24)
+
+  vatPercent          Int     @default(24)
+  vatExemptionCode    String?
+  vatCategory         Int?
+  incomeClassType     String? @default("E3_561_001")
+  incomeClassCategory String? @default("category1_3")
+
+  mydataType String? @default("2.1") 
+
+  customerVat        String?
+  customerName       String?
+  customerCountry    String?
+  customerCity       String?
+  customerPostalCode String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

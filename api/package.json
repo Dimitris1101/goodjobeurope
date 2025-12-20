@@ -1,10 +1,56 @@
 {
   "dependencies": {
-    "@prisma/client": "^6.14.0",
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/platform-socket.io": "^11.1.6",
+    "@nestjs/schedule": "^6.0.1",
+    "@nestjs/serve-static": "^5.0.3",
+    "@nestjs/websockets": "^11.1.6",
+    "@prisma/client": "^6.19.0",
+    "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "jsonwebtoken": "^9.0.2",
-    "prisma": "^6.14.0"
+    "multer": "^2.0.2",
+    "next-intl": "^4.3.11",
+    "node-fetch": "^2.7.0",
+    "nodemailer": "^7.0.6",
+    "passport": "^0.7.0",
+    "passport-facebook": "^3.0.0",
+    "passport-google-oauth20": "^2.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "sharp": "^0.34.4",
+    "socket.io": "^4.8.1",
+    "stripe": "^20.1.0",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.10",
+    "@types/bcrypt": "^6.0.0",
+    "@types/express": "^5.0.3",
+    "@types/google.maps": "^3.58.1",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^20.19.19",
+    "@types/node-fetch": "^2.6.13",
+    "@types/nodemailer": "^7.0.2",
+    "@types/passport-facebook": "^3.0.4",
+    "@types/passport-google-oauth20": "^2.0.17",
+    "prisma": "^6.19.0",
+    "ts-node": "^10.9.2"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.cjs"
+  },
+  "scripts": {
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "prisma:seed": "ts-node prisma/seed.ts"
   }
 }
