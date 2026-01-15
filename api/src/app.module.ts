@@ -32,7 +32,7 @@ import { ProviderTestController } from './provider/provider.test.controller';
 import { EtimologieraProviderService } from './provider/etimologiera-provider.service';
 import { BillingModule } from './billing/billing.module';
 import { SubscriptionLockGuard } from './auth/subscription-lock.guard';
-
+import { R2Service } from './r2/r2.service';
 
 @Module({
   imports: [
@@ -70,6 +70,7 @@ import { SubscriptionLockGuard } from './auth/subscription-lock.guard';
   ],
   providers: [
     PrismaService,
+    R2Service,
     LocationService,
     TranslationService,
     MailerService,

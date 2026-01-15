@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../prisma.service';
 import { CompanyPlan, JobStatus, JobWorkMode, SwipeDecision } from '@prisma/client';
 import { LocationService } from '../location/location.service';
+import { R2Service } from '../r2/r2.service';
 
 /*const normSkill = (s: string) =>
   (s ?? '')
@@ -26,6 +27,7 @@ export class CompanyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly locationService: LocationService,
+      private readonly r2: R2Service,
   ) {}
 
   private planDefaultLimit(plan: CompanyPlan): number | 'UNLIMITED' {
@@ -435,6 +437,40 @@ export class CompanyService {
       ),
     }));
   }
+
+  async getCandidateVideoForLikedMatchup(userId: number, jobId: number, candidateId: number) {
+  const companyId = await this.getCompanyIdByUserId(userId);
+
+  // ✅ authorization: must have LIKE on a job owned by this company
+  const like = await this.prisma.jobSwipe.findFirst({
+    where: {
+      jobId,
+      candidateId,
+      decision: SwipeDecision.LIKE,
+      job: { companyId },
+    },
+    select: { id: true },
+  });
+
+  if (!like) {
+    throw new ForbiddenException('Not allowed');
+  }
+
+  const c = await this.prisma.candidate.findUnique({
+    where: { id: candidateId },
+    select: { videoKey: true, videoStatus: true },
+  });
+
+  if (!c?.videoKey || c.videoStatus !== 'READY') {
+    return { playUrl: null };
+  }
+
+  // χρειάζεται R2Service εδώ:
+  // 1) κάνε inject R2Service στο CompanyService constructor
+  const playUrl = await this.r2.presignGet({ key: c.videoKey, expiresInSec: 60 * 10 });
+
+  return { playUrl };
+}
 
   /** Καταγραφή swipe (LIKE ή PASS) για συγκεκριμένο candidate σε συγκεκριμένη αγγελία. */
   async swipeCandidate(

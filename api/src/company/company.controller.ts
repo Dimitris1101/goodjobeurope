@@ -245,6 +245,15 @@ export class CompanyController {
     return this.service.listLikedByUserId(user.sub);
   }
 
+  @Get('matchups/video')
+async getCandidateVideoForMatchup(
+  @CurrentUser() user: { sub: number },
+  @Query('jobId', ParseIntPipe) jobId: number,
+  @Query('candidateId', ParseIntPipe) candidateId: number,
+) {
+  return this.service.getCandidateVideoForLikedMatchup(user.sub, jobId, candidateId);
+}
+
   /** Δημόσιο προφίλ υποψηφίου για popup */
   @Get('candidates/:id')
   async getCandidatePublic(

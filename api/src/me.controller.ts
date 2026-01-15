@@ -32,6 +32,9 @@ import * as fsp from 'fs/promises';
 import sharp from 'sharp';
 import { CompanyPlan } from '@prisma/client';
 import { LocationService } from './location/location.service';
+import { R2Service } from './r2/r2.service'; // προσαρμόζεις path αν χρειαστεί
+import { randomUUID } from 'crypto';
+
 
 /** Single source of truth for uploads root (must match main.ts static serving) */
 const uploadsDir = process.env.UPLOADS_DIR || join(process.cwd(), 'uploads');
@@ -105,6 +108,7 @@ export class MeController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly locationService: LocationService,
+     private readonly r2: R2Service,
   ) {}
 
   // ========= GET /me =========
@@ -728,6 +732,162 @@ export class MeController {
 
     return updated;
   }
+
+  @Post('candidate/video/presign')
+async presignCandidateVideo(
+  @CurrentUser() user: { sub: number; role?: string },
+  @Body() body: { contentType?: string },
+) {
+  if (user.role !== 'CANDIDATE') {
+    throw new ForbiddenException('Only candidates can upload video');
+  }
+
+  const contentType = (body?.contentType || '').toLowerCase().trim();
+  const allowed = ['video/mp4', 'video/webm', 'video/quicktime'];
+  if (!allowed.includes(contentType)) {
+    throw new BadRequestException('Invalid contentType. Allowed: video/mp4, video/webm, video/quicktime');
+  }
+
+  const candidateId = await this.getCandidateIdOrThrow(user.sub);
+
+  const ext =
+    contentType === 'video/webm' ? 'webm' :
+    contentType === 'video/quicktime' ? 'mov' :
+    'mp4';
+
+  const key = `candidate-videos/${candidateId}/${Date.now()}-${randomUUID()}.${ext}`;
+
+  const uploadUrl = await this.r2.presignPut({
+    key,
+    contentType,
+    expiresInSec: 60 * 5,
+  });
+
+  // optional: mark UPLOADING
+  await this.prisma.candidate.update({
+    where: { id: candidateId },
+    data: { videoStatus: 'UPLOADING' },
+  });
+
+  return { uploadUrl, objectKey: key };
+}
+
+@Post('candidate/video/confirm')
+async confirmCandidateVideo(
+  @CurrentUser() user: { sub: number; role?: string },
+  @Body() body: { objectKey?: string },
+) {
+  if (user.role !== 'CANDIDATE') {
+    throw new ForbiddenException('Only candidates can confirm video');
+  }
+  const candidateId = await this.getCandidateIdOrThrow(user.sub);
+
+  const key = String(body?.objectKey || '').trim();
+  if (!key || !key.startsWith(`candidate-videos/${candidateId}/`)) {
+    throw new BadRequestException('Invalid objectKey');
+  }
+
+  // check exists + size
+  const head = await this.r2.headObject(key);
+  const size = Number(head?.ContentLength ?? 0);
+
+  // π.χ. 25MB hard limit (για 15 sec είναι αρκετό)
+  const MAX = 25 * 1024 * 1024;
+  if (!size || size > MAX) {
+    // delete and reject
+    try { await this.r2.deleteObject(key); } catch {}
+    await this.prisma.candidate.update({
+      where: { id: candidateId },
+      data: {
+        videoStatus: 'REJECTED',
+        videoKey: null,
+        videoDurationSec: null,
+        videoUpdatedAt: new Date(),
+      },
+    });
+    throw new BadRequestException('Video too large (max 25MB).');
+  }
+
+  // delete previous video if exists (replace behavior)
+  const prev = await this.prisma.candidate.findUnique({
+    where: { id: candidateId },
+    select: { videoKey: true },
+  });
+  if (prev?.videoKey && prev.videoKey !== key) {
+    try { await this.r2.deleteObject(prev.videoKey); } catch {}
+  }
+
+  await this.prisma.candidate.update({
+    where: { id: candidateId },
+    data: {
+      videoKey: key,
+      videoStatus: 'READY',
+      videoUpdatedAt: new Date(),
+    },
+  });
+
+  return { ok: true };
+}
+
+@Delete('candidate/video')
+async deleteCandidateVideo(@CurrentUser() user: { sub: number; role?: string }) {
+  if (user.role !== 'CANDIDATE') {
+    throw new ForbiddenException('Only candidates can delete video');
+  }
+  const candidateId = await this.getCandidateIdOrThrow(user.sub);
+
+  const c = await this.prisma.candidate.findUnique({
+    where: { id: candidateId },
+    select: { videoKey: true },
+  });
+
+  if (c?.videoKey) {
+    try { await this.r2.deleteObject(c.videoKey); } catch {}
+  }
+
+  await this.prisma.candidate.update({
+    where: { id: candidateId },
+    data: {
+      videoKey: null,
+      videoStatus: null,
+      videoDurationSec: null,
+      videoUpdatedAt: new Date(),
+    },
+  });
+
+  return { ok: true };
+}
+
+
+@Get('candidate/video/play')
+async playCandidateVideo(@CurrentUser() user: { sub: number; role?: string }) {
+  if (user.role !== 'CANDIDATE') {
+    throw new ForbiddenException('Only candidates can access video');
+  }
+
+  const candidateId = await this.getCandidateIdOrThrow(user.sub);
+
+  const cand = await this.prisma.candidate.findUnique({
+    where: { id: candidateId },
+    select: { videoKey: true, videoStatus: true },
+  });
+
+  if (!cand?.videoKey) {
+    return { playUrl: null };
+  }
+
+  // προαιρετικά: αν θες να επιτρέπεις μόνο όταν είναι READY
+  if (cand.videoStatus && cand.videoStatus !== 'READY') {
+    return { playUrl: null };
+  }
+
+  const playUrl = await this.r2.presignGet({
+    key: cand.videoKey,
+    expiresInSec: 60 * 10, // 10 λεπτά
+  });
+
+  return { playUrl };
+}
 
   // ========= Helpers για αρχεία (company media) =========
   private ensureDir(p: string) {

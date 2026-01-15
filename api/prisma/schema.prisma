@@ -178,6 +178,11 @@ model Candidate {
   locationCountryName String?
   locationText        String? // full formatted address (για εμφάνιση)
 
+  videoKey         String?
+  videoStatus      String?   // READY | REJECTED | UPLOADING
+  videoDurationSec Int?
+  videoUpdatedAt   DateTime?
+
   user          User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
   swipes        JobSwipe[]
   languages     CandidateLanguage[]

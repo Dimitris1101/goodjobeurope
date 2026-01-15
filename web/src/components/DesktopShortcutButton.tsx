@@ -44,6 +44,7 @@ function buildMacWebloc(siteUrl: string) {
 </plist>`;
 }
 
+
 function buildLinuxDesktop(siteUrl: string, iconUrl: string) {
   return `[Desktop Entry]
 Type=Application

@@ -7,13 +7,16 @@ import {
   UseGuards,
   UsePipes,
   ValidationPipe,
-  BadRequestException,
+  ForbiddenException,
+  Param,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { CandidateService } from './candidate.service';
 import { Transform } from 'class-transformer';
 import { IsInt, IsOptional, IsIn } from 'class-validator';
+import { PrismaService } from '../prisma.service';
+import { R2Service } from '../r2/r2.service';
 
 class MatchupsQueryDto {
   @Transform(({ value }) => Number(value))
@@ -45,7 +48,12 @@ class SwipeDto {
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
 @Controller('candidate')
 export class CandidateController {
-  constructor(private readonly service: CandidateService) {}
+  constructor(
+  private readonly service: CandidateService,
+  private readonly prisma: PrismaService,
+  private readonly r2: R2Service,
+) {}
+
 
   @Get('matchups')
   async matchups(@CurrentUser() user: { sub: number }, @Query() q: MatchupsQueryDto) {
@@ -86,6 +94,34 @@ export class CandidateController {
       sectorOtherText: q.sectorOtherText,
     });
   }
+
+  @Get(':candidateId/video/play')
+async playCandidateVideoForCompany(
+  @CurrentUser() user: { sub: number; role?: string },
+  @Param('candidateId') candidateIdRaw: string,
+) {
+  if (user.role !== 'COMPANY') {
+    throw new ForbiddenException('Only companies can access candidate videos');
+  }
+
+  const candidateId = Number(candidateIdRaw) || 0;
+  if (!candidateId) return { playUrl: null };
+
+  const cand = await this.prisma.candidate.findUnique({
+    where: { id: candidateId },
+    select: { videoKey: true, videoStatus: true },
+  });
+
+  if (!cand?.videoKey) return { playUrl: null };
+  if (cand.videoStatus && cand.videoStatus !== 'READY') return { playUrl: null };
+
+  const playUrl = await this.r2.presignGet({
+    key: cand.videoKey,
+    expiresInSec: 60 * 10,
+  });
+
+  return { playUrl };
+}
 
   @Post('swipe')
   async swipe(@CurrentUser() user: { sub: number }, @Body() body: SwipeDto) {

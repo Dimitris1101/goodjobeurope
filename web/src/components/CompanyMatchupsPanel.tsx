@@ -19,6 +19,8 @@ type Props = {
     candidateLocation?: string | null;
     createdAt: string;
   }) => void;
+
+  onWatchVideo: (candidateId: number) => void | Promise<void>; // ✅ ΝΕΟ
 };
 
 // Γραμμή από το /company/matchups?jobId=...
@@ -54,6 +56,7 @@ export default function CompanyMatchupsPanel({
   activeJobId,
   onChangeJob,
   onCompanyLike,
+  onWatchVideo,
 }: Props) {
   const router = useRouter();
 
@@ -64,6 +67,10 @@ export default function CompanyMatchupsPanel({
 
   // modal state
   const [selected, setSelected] = useState<CandidateDetails | null>(null);
+  const [videoOpen, setVideoOpen] = useState(false);
+const [videoUrl, setVideoUrl] = useState<string | null>(null);
+const [videoLoading, setVideoLoading] = useState(false);
+const [videoErr, setVideoErr] = useState<string | null>(null);
 
   const [ratingTarget, setRatingTarget] = useState<{
     jobId: number;
@@ -117,6 +124,10 @@ export default function CompanyMatchupsPanel({
     });
   };
 
+   // Τίτλος τρέχουσας αγγελίας (για το callback)
+  const jobTitle =
+    activeJobId ? jobs.find((j) => j.id === activeJobId)?.title ?? "—" : "—";
+
   const openRatingModal = () => {
     if (!selected || !activeJobId) return;
     const existing = rows.find((x) => x.candidateId === selected.id);
@@ -137,9 +148,37 @@ export default function CompanyMatchupsPanel({
     window.open(href, "_blank", "noopener,noreferrer");
   };
 
-  // Τίτλος τρέχουσας αγγελίας (για το callback)
-  const jobTitle =
-    activeJobId ? jobs.find((j) => j.id === activeJobId)?.title ?? "—" : "—";
+  const openCandidateVideo = async (candidateId: number) => {
+  setVideoErr(null);
+  setVideoUrl(null);
+  setVideoOpen(true);
+  setVideoLoading(true);
+
+  try {
+    const { data } = await api.get<{ playUrl: string | null }>(
+      `/candidate/${candidateId}/video/play`
+    );
+
+    if (!data?.playUrl) {
+      setVideoErr("This candidate has no video.");
+      setVideoUrl(null);
+    } else {
+      setVideoUrl(data.playUrl);
+    }
+  } catch (e: any) {
+    setVideoErr(e?.response?.data?.message ?? "Could not load candidate video.");
+    setVideoUrl(null);
+  } finally {
+    setVideoLoading(false);
+  }
+};
+
+const closeVideo = () => {
+  setVideoOpen(false);
+  setVideoUrl(null);
+  setVideoErr(null);
+  setVideoLoading(false);
+};
 
   // Like & Message: δημιουργεί match, log-άρει swipe, ενημερώνει parent + ανοίγει messenger
   const likeAndMessage = async (payload: {
@@ -400,6 +439,15 @@ export default function CompanyMatchupsPanel({
                     </button>
                   )}
 
+                  <button
+  type="button"
+  onClick={() => openCandidateVideo(selected.id)}
+  className="rounded border border-[#03BFCB] bg-transparent px-4 py-2 text-sm font-medium text-[#02899C] hover:bg-white/10"
+  title="Watch candidate video"
+>
+  Watch video
+</button>
+
                   {/* ✅ Like → Conversation → Messenger + log & update */}
                   <button
                     className="rounded-lg bg-blue-600 text-white px-3 py-2"
@@ -531,6 +579,47 @@ export default function CompanyMatchupsPanel({
           </div>
         </div>
       )}
+      {/* ======= VIDEO MODAL ======= */}
+{videoOpen && (
+  <div className="fixed inset-0 z-[120]">
+    <div className="absolute inset-0 bg-black/70" onClick={closeVideo} />
+
+    <div className="absolute inset-0 flex items-center justify-center p-3 sm:p-6">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-black/90 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+          <div className="text-sm font-semibold text-white">Candidate video</div>
+          <button
+            onClick={closeVideo}
+            className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs text-white hover:bg-white/10"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="p-4">
+          {videoLoading ? (
+            <div className="text-sm text-white/80">Loading video...</div>
+          ) : videoErr ? (
+            <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {videoErr}
+            </div>
+          ) : videoUrl ? (
+            <video
+              key={videoUrl}
+              src={videoUrl}
+              controls
+              playsInline
+              preload="auto"
+              className="w-full rounded-xl bg-black"
+            />
+          ) : (
+            <div className="text-sm text-white/70">No video available.</div>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
       {/* ======= /MODAL POPUP ======= */}
     </aside>
   );
