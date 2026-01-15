@@ -8,8 +8,10 @@ import DesktopShortcutButton from "@/components/DesktopShortcutButton";
 
 export default function Header() {
   const pathname = usePathname();
-  const isActive = (href: string) =>
-    pathname === href || pathname?.startsWith(href + "/");
+
+  const isHome = pathname === "/" || pathname?.startsWith("/en") || pathname?.startsWith("/el");
+  const isLogin = pathname?.startsWith("/auth/login");
+  const isRegister = pathname?.startsWith("/auth/register");
 
   return (
     <>
@@ -24,24 +26,18 @@ export default function Header() {
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur border-b">
         <div
           className="
-            mx-auto max-w-6xl px-4 
-            py-2.5 md:py-3 
+            mx-auto max-w-6xl px-4
+            py-2.5 md:py-3
             flex flex-col gap-2
             sm:flex-row sm:items-center sm:justify-between
           "
         >
           {/* Left: brand + logo */}
-          <Link
-            href="/"
-            className="flex items-center gap-2"
-            aria-label="Home"
-          >
-            {/* Brand text - hidden on very small screens to avoid overflow */}
+          <Link href="/" className="flex items-center gap-2" aria-label="Home">
             <span className="hidden sm:inline font-semibold text-base md:text-xl tracking-tight">
               GOODJOBEUROPE
             </span>
 
-            {/* Logo - scales nicely on mobile */}
             <Image
               src="/logo.png"
               alt="GOODJOBEUROPE"
@@ -52,54 +48,59 @@ export default function Header() {
             />
           </Link>
 
-          {/* Right: desktop navigation */}
+          {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-3">
             <Link
               href="/#plans"
-              className={`px-3 py-2 rounded-lg text-sm hover:bg-gray-50 ${
-                isActive("/#plans") ? "underline" : ""
-              }`}
+              className="px-3 py-2 rounded-lg text-sm hover:bg-gray-50"
             >
               Plans
             </Link>
 
-            <LanguageToggle />
+            {/* UI Language */}
+            <div className="flex items-center">
+              <LanguageToggle />
+            </div>
 
             <Link
               href="/auth/login"
-              className="px-4 py-2 text-sm rounded-lg border hover:bg-gray-50"
+              className={`px-4 py-2 text-sm rounded-lg border hover:bg-gray-50 ${
+                isLogin ? "bg-gray-50" : ""
+              }`}
             >
               Log In
             </Link>
 
             <Link
               href="/auth/register"
-              className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+              className={`px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 ${
+                isRegister ? "ring-2 ring-blue-300" : ""
+              }`}
             >
               Sign Up
             </Link>
           </nav>
 
-          {/* Right: mobile actions (full-width row, can wrap) */}
-          <div
-            className="
-              flex md:hidden 
-              items-center justify-end 
-              gap-2 flex-wrap
-            "
-          >
-            <LanguageToggle />
+          {/* Mobile actions */}
+          <div className="flex md:hidden items-center justify-end gap-2 flex-wrap">
+            <div className="flex items-center">
+              <LanguageToggle />
+            </div>
 
             <Link
               href="/auth/login"
-              className="px-3 py-1.5 text-xs font-medium rounded-lg border hover:bg-gray-50"
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border hover:bg-gray-50 ${
+                isLogin ? "bg-gray-50" : ""
+              }`}
             >
               Log In
             </Link>
 
             <Link
               href="/auth/register"
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 ${
+                isRegister ? "ring-2 ring-blue-300" : ""
+              }`}
             >
               Sign Up
             </Link>
@@ -109,3 +110,4 @@ export default function Header() {
     </>
   );
 }
+

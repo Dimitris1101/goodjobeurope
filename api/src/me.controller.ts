@@ -1,9 +1,20 @@
-// C:\job-matching\api\src\me.controller.ts
+// src/me.controller.ts
 
 import {
-  BadRequestException, Body, Controller, ForbiddenException, Get, Put,
-  UseGuards, UseInterceptors, UploadedFiles, UsePipes, ValidationPipe,
-  Post, Param, Delete,
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  Param,
+  Post,
+  Put,
+  UploadedFiles,
+  UseGuards,
+  UseInterceptors,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -21,6 +32,9 @@ import * as fsp from 'fs/promises';
 import sharp from 'sharp';
 import { CompanyPlan } from '@prisma/client';
 import { LocationService } from './location/location.service';
+
+/** Single source of truth for uploads root (must match main.ts static serving) */
+const uploadsDir = process.env.UPLOADS_DIR || join(process.cwd(), 'uploads');
 
 // ====== Plan canonical names (onboarding / subscriptions) ======
 type PlanCanonical =
@@ -46,7 +60,9 @@ const CompanyPlans = new Set<PlanCanonical>([
 ]);
 
 // ✅ defaults για plan benefits (adsEnabled/priceCents) όταν γίνεται direct grant
-const planDefaults = (name: PlanCanonical): { adsEnabled: boolean; priceCents: number } => {
+const planDefaults = (
+  name: PlanCanonical,
+): { adsEnabled: boolean; priceCents: number } => {
   switch (name) {
     case 'VIP_MEMBER':
       return { adsEnabled: false, priceCents: 0 };
@@ -55,8 +71,6 @@ const planDefaults = (name: PlanCanonical): { adsEnabled: boolean; priceCents: n
     case 'COMPANY_BASIC':
       return { adsEnabled: true, priceCents: 0 };
     case 'COMPANY_SILVER':
-      // (σήμερα είναι free στο UI, αλλά το canonical σου είναι paid plan παλιότερα.
-      // κρατάμε safe defaults, το actual paid γίνεται μέσω billing.confirm)
       return { adsEnabled: true, priceCents: 0 };
     case 'COMPANY_GOLDEN':
       return { adsEnabled: false, priceCents: 0 };
@@ -77,6 +91,12 @@ const toCompanyPlan = (p: PlanCanonical): CompanyPlan | null => {
     default:
       return null;
   }
+};
+
+const forcePdfInline = (res: any, _filePath: string) => {
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'inline');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 };
 
 @UseGuards(JwtAuthGuard)
@@ -114,24 +134,24 @@ export class MeController {
           .filter(Boolean)
       : [];
 
+    const c: any = user.candidate as any;
+
     const candidateLocationDisplay =
-      (user.candidate as any)?.locationText ||
-      ((user.candidate as any)?.locationCity &&
-      (user.candidate as any)?.locationCountryCode
-        ? `${(user.candidate as any).locationCity}, ${
-            (user.candidate as any).locationCountryCode
-          }`
-        : (user.candidate as any)?.location || null);
+      c?.locationText ||
+      (c?.locationCity && c?.locationCountryCode
+        ? `${c.locationCity}, ${c.locationCountryCode}`
+        : c?.location || null);
 
     const candidateWithExtras = user.candidate
       ? {
           ...user.candidate,
           location: candidateLocationDisplay,
+          // συμβατότητα με UI που περιμένει { skills: [{skill:{name}}] }
           skills: skillsList.map((name) => ({ skill: { name } })),
         }
       : undefined;
 
-    let rawPlan = user.subscriptions?.[0]?.plan?.name ?? null;
+    const rawPlan = user.subscriptions?.[0]?.plan?.name ?? null;
     const planCanonical = rawPlan
       ? ((legacyToCanonical[rawPlan] ?? rawPlan) as PlanCanonical)
       : null;
@@ -145,8 +165,48 @@ export class MeController {
       subscriptions: user.subscriptions,
       plan: planCanonical,
       onboardingCompleted: !!planCanonical,
+      uiLanguage: user.candidate?.preferredLanguage ?? null,
+      preferredLanguage: user.candidate?.preferredLanguage ?? null,
     };
   }
+
+// ========= PUT /me/candidate/preferred-language =========
+  @Put('candidate/preferred-language')
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    }),
+  )
+  async setCandidatePreferredLanguage(
+    @CurrentUser() user: { sub: number; role?: string },
+    @Body() body: { preferredLanguage: string },
+  ) {
+    if (user.role !== 'CANDIDATE') {
+      throw new ForbiddenException('Only candidates can set preferredLanguage');
+    }
+
+    const lang = (body?.preferredLanguage || '').trim().toLowerCase();
+    if (!lang) throw new BadRequestException('Missing preferredLanguage');
+
+    // update candidate row
+    await this.prisma.candidate.update({
+      where: { userId: user.sub },
+      data: { preferredLanguage: lang },
+      select: { id: true },
+    });
+
+    return { ok: true, preferredLanguage: lang };
+  }
+
+
+
+
+
+
+
+
 
   // ========= Shared storage (avatars / cv / reference-letters) =========
   private static storage = diskStorage({
@@ -154,7 +214,7 @@ export class MeController {
       let folder = 'avatars';
       if (file.fieldname === 'cv') folder = 'cv';
       if (file.fieldname === 'referenceLetter') folder = 'reference-letters';
-      const dest = join(process.cwd(), 'uploads', folder);
+      const dest = join(uploadsDir, folder);
       try {
         mkdirSync(dest, { recursive: true });
       } catch {}
@@ -227,8 +287,11 @@ export class MeController {
       throw new ForbiddenException('Only candidates can update candidate profile');
     }
 
-    // ---- VIP gate for avatar ----
     const avatarFile = files?.avatar?.[0] ?? null;
+    const cvFile = files?.cv?.[0] ?? null;
+    const refFile = files?.referenceLetter?.[0] ?? null;
+
+    // ---- VIP gate for avatar ----
     if (avatarFile) {
       const isVip = await this.isVipCandidate(user.sub);
       if (!isVip) {
@@ -239,9 +302,6 @@ export class MeController {
       }
     }
     // -----------------------------
-
-    const cvFile = files?.cv?.[0] ?? null;
-    const refFile = files?.referenceLetter?.[0] ?? null;
 
     const current = await this.prisma.candidate.findUnique({
       where: { userId: user.sub },
@@ -269,13 +329,10 @@ export class MeController {
       },
     });
 
-    const newAvatarUrl = avatarFile
-      ? `/uploads/avatars/${avatarFile.filename}`
-      : undefined;
-    const newCvUrl = cvFile ? `/uploads/cv/${cvFile.filename}` : undefined;
-    const newRefUrl = refFile
-      ? `/uploads/reference-letters/${refFile.filename}`
-      : undefined;
+    // ✅ ALWAYS store as absolute path (starts with /)
+    const newAvatarUrl = avatarFile ? `/media/avatars/${avatarFile.filename}` : undefined;
+    const newCvUrl = cvFile ? `/media/cv/${cvFile.filename}` : undefined;
+    const newRefUrl = refFile ? `/media/reference/${refFile.filename}` : undefined;
 
     const nextSkillsText = body.skillsCsv
       ? body.skillsCsv
@@ -298,18 +355,23 @@ export class MeController {
       avatarUrl: newAvatarUrl ?? current?.avatarUrl ?? null,
       cvUrl: newCvUrl ?? current?.cvUrl ?? null,
       gender: body.gender ?? current?.gender ?? null,
-      birthDate: body.birthDate ? new Date(body.birthDate) : current?.birthDate ?? null,
+      birthDate: body.birthDate
+        ? new Date(body.birthDate)
+        : current?.birthDate ?? null,
       countryOfOrigin: body.countryOfOrigin ?? current?.countryOfOrigin ?? null,
-      driverLicenseA: body.driverLicenseA ?? current?.driverLicenseA ?? false,
-      driverLicenseM: body.driverLicenseM ?? current?.driverLicenseM ?? false,
-      preferredLanguage: body.preferredLanguage ?? current?.preferredLanguage ?? null,
-      referenceLetterUrl: newRefUrl ?? body.referenceLetterUrl ?? current?.referenceLetterUrl ?? null,
+      driverLicenseA:
+        body.driverLicenseA ?? current?.driverLicenseA ?? false,
+      driverLicenseM:
+        body.driverLicenseM ?? current?.driverLicenseM ?? false,
+      preferredLanguage:
+        body.preferredLanguage ?? current?.preferredLanguage ?? null,
+      referenceLetterUrl:
+        newRefUrl ?? (body as any).referenceLetterUrl ?? current?.referenceLetterUrl ?? null,
     };
 
     const completedNow =
       !!merged.name && !!(merged.experience || merged.skillsText || merged.about);
-    const finalProfileCompleted =
-      (current?.profileCompleted ?? false) || completedNow;
+    const finalProfileCompleted = (current?.profileCompleted ?? false) || completedNow;
 
     const updated = await this.prisma.candidate.update({
       where: { userId: user.sub },
@@ -338,6 +400,7 @@ export class MeController {
       },
     });
 
+    // languages can come as JSON string or array
     let parsedLanguages: Array<{ name: string; level?: string }> | null = null;
 
     if (typeof (body as any).languages === 'string') {
@@ -371,6 +434,7 @@ export class MeController {
       where: { id: updated.id },
       include: { languages: true },
     });
+
     return final;
   }
 
@@ -388,6 +452,7 @@ export class MeController {
     }
 
     const place = await this.locationService.resolvePlaceId(body.placeId);
+
     return this.prisma.candidate.update({
       where: { userId: user.sub },
       data: {
@@ -461,7 +526,7 @@ export class MeController {
         }
       | null = null;
 
-    if (body.placeId && !body.lat && !body.lng) {
+    if (body.placeId && typeof body.lat !== 'number' && typeof body.lng !== 'number') {
       const place = await this.locationService.resolvePlaceId(body.placeId);
       payload = {
         placeId: place.placeId,
@@ -481,7 +546,8 @@ export class MeController {
     ) {
       payload = {
         placeId: body.placeId,
-        text: body.text ?? [body.city, body.countryName].filter(Boolean).join(', '),
+        text:
+          body.text ?? [body.city, body.countryName].filter(Boolean).join(', '),
         city: body.city ?? null,
         admin: body.admin ?? null,
         countryCode: body.countryCode ?? null,
@@ -639,6 +705,7 @@ export class MeController {
       about: updateData.about,
       phone: updateData.phone,
     });
+
     updateData.profileCompleted = existing.profileCompleted || completedNow;
 
     const updated = await this.prisma.company.update({
@@ -668,6 +735,7 @@ export class MeController {
       mkdirSync(p, { recursive: true });
     } catch {}
   }
+
   private randomName(ext = '.jpg') {
     return `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
   }
@@ -699,15 +767,17 @@ export class MeController {
       where: { userId: user.sub },
       select: { id: true, logoUrl: true, coverUrl: true, name: true },
     });
+
     if (!existing) {
       throw new BadRequestException(
         'Please create the company record first (name) before uploading media.',
       );
     }
 
-    const uploadsRoot = join(process.cwd(), 'uploads');
+    const uploadsRoot = uploadsDir;
     const logoOutDir = join(uploadsRoot, 'company-logos', 'medium');
     const coverOutDir = join(uploadsRoot, 'company-covers', 'medium');
+
     this.ensureDir(logoOutDir);
     this.ensureDir(coverOutDir);
 
@@ -720,7 +790,7 @@ export class MeController {
         .resize(192, 192, { fit: 'cover' })
         .jpeg({ quality: 82 })
         .toFile(outPath);
-      newLogoUrl = `/uploads/company-logos/medium/${outName}`;
+      newLogoUrl = `/media/company-logos/medium/${outName}`;
     }
 
     let newCoverUrl: string | undefined;
@@ -732,7 +802,7 @@ export class MeController {
         .resize(1600, 420, { fit: 'cover' })
         .jpeg({ quality: 85 })
         .toFile(outPath);
-      newCoverUrl = `/uploads/company-covers/medium/${outName}`;
+      newCoverUrl = `/media/company-covers/medium/${outName}`;
     }
 
     if (!newLogoUrl && !newCoverUrl) {
@@ -767,8 +837,7 @@ export class MeController {
   @Put('plan')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   async selectPlan(
-    @CurrentUser()
-    user: { sub: number; role?: 'CANDIDATE' | 'COMPANY' | 'ADMIN' },
+    @CurrentUser() user: { sub: number; role?: 'CANDIDATE' | 'COMPANY' | 'ADMIN' },
     @Body() body: SelectUserPlanDto,
   ) {
     const raw = (body.plan || '').trim();
@@ -778,19 +847,23 @@ export class MeController {
       where: { id: user.sub },
       select: { role: true },
     });
-    const role = db?.role ?? user.role;
+
+    const role = db?.role ?? (user.role as any);
     if (!role || role === 'ADMIN') throw new ForbiddenException('Not allowed');
 
     const planName = (legacyToCanonical[raw] ?? raw) as PlanCanonical;
 
     if (role === 'CANDIDATE' && !CandidatePlans.has(planName)) {
-      throw new BadRequestException(`Plan "${planName}" not allowed for role "CANDIDATE".`);
+      throw new BadRequestException(
+        `Plan "${planName}" not allowed for role "CANDIDATE".`,
+      );
     }
     if (role === 'COMPANY' && !CompanyPlans.has(planName)) {
-      throw new BadRequestException(`Plan "${planName}" not allowed for role "COMPANY".`);
+      throw new BadRequestException(
+        `Plan "${planName}" not allowed for role "COMPANY".`,
+      );
     }
 
-    // ✅ upsert plan με defaults (benefits)
     const defaults = planDefaults(planName);
 
     const plan = await this.prisma.plan.upsert({
@@ -833,3 +906,4 @@ export class MeController {
     return [];
   }
 }
+

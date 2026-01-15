@@ -1,21 +1,19 @@
-import Header from "@/components/Header";
-import Hero from "@/components/Hero";
-import Pricing from "@/components/Pricing";
-import Footer from "@/components/Footer";
-import InfoTimeline from '@/components/InfoTimeline';
-import AboutSection from "@/components/AboutSection";
+import { Suspense } from "react";
+import HomeClient from "./HomeClient";
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+export default function Page() {
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header />
-      <main className="flex-1">
-        <Hero />
-        <Pricing />
-        <InfoTimeline />
-        <AboutSection /> 
-      </main>
-      <Footer />
-    </div>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          Loading…
+        </div>
+      }
+    >
+      <HomeClient />
+    </Suspense>
   );
 }
+

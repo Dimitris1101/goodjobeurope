@@ -1,60 +1,79 @@
-// C:\job-matching\web\src\components\LanguageTranslateToggle.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
 
+type Mode = 'preferred' | 'original';
+
+function getPreferredLanguage(): string {
+  if (typeof window === 'undefined') return 'en';
+  return (
+    localStorage.getItem('preferredLanguage') ||
+    localStorage.getItem('ui.accountLang') ||
+    localStorage.getItem('uiAccountLang') ||
+    'en'
+  ).toLowerCase();
+}
+
+function getMode(): Mode {
+  if (typeof window === 'undefined') return 'original';
+  const raw = (localStorage.getItem('ui.mode') || '').toLowerCase();
+  if (raw === 'original' || raw === 'preferred') return raw as Mode;
+
+  const pref = getPreferredLanguage();
+  return pref && pref !== 'en' ? 'preferred' : 'original';
+}
+
 export default function LanguageTranslateToggle() {
-  const [accountLang, setAccountLang] = useState('en');
-  const [viewLang, setViewLang] = useState('en');
+  const [preferred, setPreferred] = useState('en');
+  const [mode, setMode] = useState<Mode>('original');
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    const sync = () => {
+      const pref = getPreferredLanguage();
+      setPreferred(pref);
+      setMode(getMode());
+      setReady(true);
+    };
 
-    const acc =
-      localStorage.getItem('ui.accountLang') ||
-      localStorage.getItem('uiAccountLang') ||
-      localStorage.getItem('uiLanguage') ||
-      'en';
+    sync();
 
-    const view = localStorage.getItem('ui.viewLang') || acc;
+    const onPref = () => sync();
+    const onMode = () => sync();
 
-    setAccountLang(acc.toLowerCase());
-    setViewLang(view.toLowerCase());
-    setReady(true);
+    window.addEventListener('preferredLanguageChanged', onPref as any);
+    window.addEventListener('uiModeChanged', onMode as any);
+
+    return () => {
+      window.removeEventListener('preferredLanguageChanged', onPref as any);
+      window.removeEventListener('uiModeChanged', onMode as any);
+    };
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    setViewLang(value);
+  if (!ready) return null;
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ui.viewLang', value);
-      window.location.reload();
-    }
+  // Αν δεν έχει pref (ή είναι en), δεν δείχνουμε switcher (δεν έχει νόημα)
+  if (!preferred || preferred === 'en') return null;
+
+  const onChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextMode = e.target.value as Mode;
+    localStorage.setItem('ui.mode', nextMode);
+    window.dispatchEvent(new CustomEvent('uiModeChanged'));
+    window.location.reload(); // καθαρίζει translated DOM
   };
 
-  if (!ready) return null;
-  if (accountLang === 'en') return null; // δεν δείχνουμε toggle αν το account είναι ήδη en
-
-  const valueForSelect = viewLang === 'en' ? 'en' : accountLang;
-  const uiLabel = `UI language (${accountLang.toUpperCase()})`;
-
   return (
-    <div
-      className="inline-flex items-center gap-2" // ΔΕΝ βάζουμε text-white εδώ
-      data-no-translate
-    >
+    <div className="inline-flex items-center gap-2" data-no-translate>
       <span className="text-xs text-gray-700">View:</span>
       <select
-        value={valueForSelect}
-        onChange={handleChange}
+        value={mode}
+        onChange={onChange}
         className="px-2 py-1 text-xs border rounded-lg bg-white text-black hover:bg-gray-50"
       >
-        <option value={accountLang} className="text-black">
-          {uiLabel}
+        <option value="preferred" className="text-black">
+          UI language ({preferred.toUpperCase()})
         </option>
-        <option value="en" className="text-black">
+        <option value="original" className="text-black">
           English (original)
         </option>
       </select>

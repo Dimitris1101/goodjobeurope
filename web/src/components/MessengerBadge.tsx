@@ -31,27 +31,34 @@ export default function MessengerBadge({ role, className }: Props) {
       }
     };
 
-    const connectSocket = () => {
-      try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const s = io('http://localhost:3001/ws/chat', {
-          transports: ['websocket'],
-          withCredentials: true,
-          query: token ? { token } : undefined,
-        });
-        socketRef.current = s;
+const connectSocket = () => {
+  try {
+    const socketBase =
+      process.env.NEXT_PUBLIC_SOCKET_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : '');
 
-        // live updates από backend
-        s.on('badge:update', (payload: any) => {
-          if (!mountedRef.current) return;
-          if (payload && typeof payload.total === 'number') {
-            setCount(payload.total);
-          }
-        });
-      } catch {
-        // ignore
+    const token =
+      typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
+    const s = io(`${socketBase}/ws/chat`, {
+      transports: ['websocket'],
+      withCredentials: true,
+      auth: token ? { token } : undefined,
+    });
+
+    socketRef.current = s;
+
+    // live updates από backend
+    s.on('badge:update', (payload: any) => {
+      if (!mountedRef.current) return;
+      if (payload && typeof payload.total === 'number') {
+        setCount(payload.total);
       }
-    };
+    });
+  } catch {
+    // ignore
+  }
+};
 
     const startPolling = () => {
       const tick = async () => {

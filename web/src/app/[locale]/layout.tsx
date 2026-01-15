@@ -25,17 +25,27 @@ const messagesMap = {
   el: { common: elCommon, auth: elAuth },
 } as const;
 
+type Locale = keyof typeof messagesMap; // "en" | "el"
+
+function isLocale(x: string): x is Locale {
+  return x === "en" || x === "el";
+}
+
 export default async function LocaleLayout({
   children,
-  params
+  params,
 }: {
   children: React.ReactNode;
-  // Next 15: params είναι Promise
-  params: Promise<{ locale: keyof typeof messagesMap }>;
+  // Next 15: params είναι Promise, αλλά locale έρχεται ως string
+  params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+
+  if (!isLocale(locale)) {
+    notFound();
+  }
+
   const messages = messagesMap[locale];
-  if (!messages) notFound();
 
   return (
     <html lang={locale}>
@@ -47,3 +57,4 @@ export default async function LocaleLayout({
     </html>
   );
 }
+

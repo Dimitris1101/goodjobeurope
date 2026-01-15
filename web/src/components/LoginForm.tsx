@@ -9,9 +9,9 @@ type Me = {
   id: number;
   email: string;
   role: "CANDIDATE" | "COMPANY" | "ADMIN";
-  candidate?: { profileCompleted?: boolean };
-  company?: { profileCompleted?: boolean };
-  uiLanguage?: string; // e.g. "fr", "en", "el"
+  candidate?: { profileCompleted?: boolean; preferredLanguage?: string | null };
+  company?: { profileCompleted?: boolean; preferredLanguage?: string | null };
+  uiLanguage?: string; // optional, μπορεί να το βάλουμε αργότερα
 };
 
 function getErrorMessage(err: unknown) {
@@ -64,18 +64,32 @@ export default function LoginForm() {
       const { data: me } = await api.get<Me>("/me");
 
       // 2a) store account language
-      const accLang = (me?.uiLanguage || "en").toLowerCase();
-      localStorage.setItem("uiAccountLang", accLang);
+const accLang = ((me as any)?.candidate?.preferredLanguage || "en").toLowerCase();
 
-      // If there is no override, set account language as preferred
-      if (!localStorage.getItem("uiOverrideLang")) {
-        localStorage.setItem("preferredLanguage", accLang);
-        window.dispatchEvent(
-          new CustomEvent("preferredLanguageChanged", { detail: { lang: accLang } })
-        );
-      }
+// DEBUG (για να δεις ΤΙ έφερε το /me)
+console.log("[login] me.uiLanguage =", me?.uiLanguage, "=> accLang =", accLang);
 
-      // 3) decide where to go
+// storage
+localStorage.setItem("preferredLanguage", accLang);
+localStorage.setItem("ui.accountLang", accLang);
+localStorage.setItem("uiAccountLang", accLang);
+localStorage.setItem("ui.mode", accLang === "en" ? "original" : "preferred");
+
+// cookie
+document.cookie = `uiLanguage=${encodeURIComponent(accLang)}; path=/; max-age=31536000; SameSite=Lax`;
+
+// DEBUG: επιβεβαίωση ότι γράφτηκε
+console.log(
+  "[login] cookie now =",
+  document.cookie.split("; ").find(x => x.startsWith("uiLanguage="))
+);
+
+// events
+window.dispatchEvent(new CustomEvent("preferredLanguageChanged", { detail: { lang: accLang } }));
+window.dispatchEvent(new CustomEvent("uiModeChanged"));
+
+
+          // 3) decide where to go
       if (me.role === "CANDIDATE") {
         const done = me?.candidate?.profileCompleted === true;
         router.replace(done ? "/dashboard/candidate" : "/onboarding/candidate");

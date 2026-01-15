@@ -49,8 +49,10 @@
     "seed": "node prisma/seed.cjs"
   },
   "scripts": {
-    "start": "nest start",
-    "start:dev": "nest start --watch",
-    "prisma:seed": "ts-node prisma/seed.ts"
-  }
+  "build": "nest build",
+  "start": "nest start",
+  "start:dev": "nest start --watch",
+  "start:prod": "node dist/main.js",
+  "prisma:seed": "ts-node prisma/seed.ts"
+}
 }

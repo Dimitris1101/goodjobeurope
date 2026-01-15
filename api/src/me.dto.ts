@@ -44,6 +44,7 @@ export class SelectCompanyPlanDto {
 }
 
 export class UpdateCandidateProfileDto {
+  @IsOptional()
   @IsString()
   @Length(2, 120)
   name!: string;

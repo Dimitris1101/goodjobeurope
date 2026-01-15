@@ -17,48 +17,71 @@ export default function FullScreenAd({ onClose, children }: Props) {
   }, [onClose]);
 
   const modal = (
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 999999 }}
-      className="fixed inset-0 z-[99999]"
-    >
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999999 }}>
+      {/* overlay */}
       <div
         onClick={onClose}
-        style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.7)" }}
+        style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.75)" }}
         aria-hidden
       />
+
+      {/* content wrapper */}
       <div
-        style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", padding: 16 }}
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "grid",
+          placeItems: "center",
+          padding: 16,
+        }}
       >
         <div
-          style={{ position: "relative", width: "100%", maxWidth: 880, background: "#fff", borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,.3)" }}
+          style={{
+            position: "relative",
+            width: "100%",
+            maxWidth: 980,
+            borderRadius: 18,
+            overflow: "hidden",
+            boxShadow: "0 30px 90px rgba(0,0,0,.45)",
+          }}
         >
+          {/* single close button */}
           <button
             onClick={onClose}
             aria-label="Close ad"
-            title="Κλείσιμο"
+            title="Close"
             style={{
-              position: "absolute", right: 12, top: 12, width: 36, height: 36,
-              borderRadius: "50%", border: "1px solid #ddd", background: "#fff", cursor: "pointer", fontSize: 20
+              position: "absolute",
+              right: 14,
+              top: 14,
+              width: 40,
+              height: 40,
+              borderRadius: "999px",
+              border: "1px solid rgba(255,255,255,.35)",
+              background: "rgba(0,0,0,.35)",
+              color: "#fff",
+              cursor: "pointer",
+              fontSize: 24,
+              lineHeight: "38px",
+              zIndex: 10,
+              backdropFilter: "blur(6px)",
             }}
           >
             ×
           </button>
-          <div style={{ minHeight: 360, display: "grid", placeItems: "center", background: "#f5f5f5", borderRadius: 16 }}>
-            {children ?? <div>[Full-Screen Ad Placeholder]</div>}
-          </div>
-          <div style={{ padding: 12, textAlign: "center", fontSize: 12, color: "#666" }}>
-            Διαφήμιση • Αναβάθμισε πλάνο για λιγότερες/καθόλου
-          </div>
+
+          {/* children = το design σου */}
+          {children}
         </div>
       </div>
     </div>
   );
 
-  if (typeof window === "undefined") return null; // SSR
-  // Αν για κάποιο λόγο αποτύχει το portal, κάνε render inline:
+  if (typeof window === "undefined") return null;
   try {
     return createPortal(modal, document.body);
   } catch {
     return modal;
   }
 }
+

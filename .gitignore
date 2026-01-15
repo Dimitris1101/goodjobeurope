@@ -29,3 +29,19 @@ Thumbs.db
 # prisma local
 api/prisma/dev.db
 api/prisma/*.db
+
+
+# backups / temp / old stuff
+**/__backup_before_media_fix/
+**/backup_before_replace_*/
+**/backup_images_*/
+**/*.BAK.*
+web/public_OLD/
+web/public/backup_*/
+web/public/[0-9].jpg
+web/public/ad*.png
+web/public/ad*.jpg
+
+# optional: ignore random public images if you don't want them tracked
+# web/public/*.jpg
+# web/public/*.png

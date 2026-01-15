@@ -1,25 +1,19 @@
-"use client";
+import { Suspense } from "react";
+import LoginClient from "./LoginClient";
 
-import Header from "@/components/Header";
-import LoginForm from "@/components/LoginForm";
+export const dynamic = "force-dynamic";
 
-export default function LoginPage() {
+export default function Page() {
   return (
-    <>
-    <Header />
-    
-    <div
-      className="min-h-screen bg-cover bg-center flex items-center justify-center"
-      style={{ backgroundImage: "url('/bac_log-in.jpg')" }}
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          Loading…
+        </div>
+      }
     >
-      {/* Φόρμα μαυρο πλαισιο */}
-      <div className="w-full max-w-md bg-black/60 p-8 rounded-xl shadow-lg">
-        <h1 className="mb-6 text-center text-2xl font-bold text-white">
-          Σύνδεση σε λογαριασμό
-        </h1>
-        <LoginForm />
-      </div>
-    </div>
-    </>
+      <LoginClient />
+    </Suspense>
   );
 }
+

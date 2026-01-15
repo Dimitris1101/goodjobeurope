@@ -1,11 +1,28 @@
 'use client';
+
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
-function getCookie(name: string) {
-  if (typeof document === 'undefined') return '';
-  const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-  return m ? decodeURIComponent(m[2]) : '';
+type Mode = 'preferred' | 'original';
+
+function getPreferredLanguage(): string {
+  if (typeof window === 'undefined') return 'en';
+  return (
+    localStorage.getItem('preferredLanguage') ||
+    localStorage.getItem('ui.accountLang') ||
+    localStorage.getItem('uiAccountLang') ||
+    'en'
+  ).toLowerCase();
+}
+
+function getMode(): Mode {
+  if (typeof window === 'undefined') return 'original';
+  const raw = (localStorage.getItem('ui.mode') || '').toLowerCase();
+  if (raw === 'original' || raw === 'preferred') return raw as Mode;
+
+  // default: αν δεν έχει pref (ή είναι en), δείξε original
+  const pref = getPreferredLanguage();
+  return pref && pref !== 'en' ? 'preferred' : 'original';
 }
 
 export function useAutoTranslate() {
@@ -14,38 +31,35 @@ export function useAutoTranslate() {
   const debounceIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const lang = getCookie('uiLanguage');
-    if (!lang) return;
+    if (typeof window === 'undefined') return;
 
-    let cancelled = false;
+    const run = async () => {
+      const mode = getMode();
+      if (mode === 'original') return;
 
-    async function runOnce() {
+      const lang = getPreferredLanguage();
+      if (!lang || lang === 'en') return;
+
       // περίμενε λίγο να ολοκληρωθεί η hydration
       await new Promise((r) => setTimeout(r, 120));
-      if (cancelled) return;
 
       const mod = await import('@/lib/autoTranslate');
-      if (cancelled) return;
 
       try {
         await mod.autoTranslatePage({
           lang,
           apiBase: process.env.NEXT_PUBLIC_API_URL || '',
-          // source: undefined => auto-detect
         });
-
-        // μικρό banner για debug/επιβεβαίωση
-        const banner = document.createElement('div');
-        banner.textContent = `Translated UI → ${lang}`;
-        banner.style.cssText =
-          'position:fixed;bottom:12px;right:12px;padding:6px 10px;background:#111;color:#fff;border-radius:8px;font-size:12px;z-index:999999;opacity:.9';
-        document.body.appendChild(banner);
-        window.setTimeout(() => banner.remove(), 1500);
-      } catch (e) {
-        // σιωπηρά, ώστε να μην ενοχλεί τον χρήστη
-        // console.warn('[autoTranslate] failed', e);
+      } catch {
+        // σιωπηρά
       }
-    }
+    };
+
+    let cancelled = false;
+    const runOnce = async () => {
+      if (cancelled) return;
+      await run();
+    };
 
     // πρώτη εκτέλεση σε κάθε αλλαγή διαδρομής
     void runOnce();
@@ -66,6 +80,7 @@ export function useAutoTranslate() {
       });
     }
 
+    // αν αλλάξει mode/lang από switcher, κάνουμε hard reload εκεί, οπότε εδώ δεν χρειάζεται listener
     return () => {
       cancelled = true;
       if (observerRef.current) {

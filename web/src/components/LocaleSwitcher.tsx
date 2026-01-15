@@ -17,7 +17,9 @@ export default function LocaleSwitcher() {
       value={locale}
       onChange={(e) => {
         const next = `/${e.target.value}${pathname.replace(/^\/(el|en)/, '') || ''}`;
-        document.cookie = `lang=${e.target.value}; path=/; max-age=31536000`;
+        document.cookie = `NEXT_LOCALE=${encodeURIComponent(
+        e.target.value
+        )}; path=/; max-age=31536000; SameSite=Lax`;
         router.push(next);
       }}
       className="rounded-md border px-2 py-1 text-sm"

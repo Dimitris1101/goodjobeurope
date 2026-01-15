@@ -1,27 +1,13 @@
-'use client';
-import { useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from "react";
+import SocialCallbackClient from "./SocialCallbackClient";
 
-export default function SocialCallbackPage() {
-  const sp = useSearchParams();
-  const router = useRouter();
+export const dynamic = "force-dynamic";
 
-  useEffect(() => {
-    const token = sp.get('token');
-    const error = sp.get('error');
-
-    if (error) {
-      // Προώθηση στη login με μήνυμα
-      router.replace(`/auth/login?error=${encodeURIComponent(error)}`);
-      return;
-    }
-    if (token) {
-      localStorage.setItem('access_token', token);
-      router.replace('/dashboard'); // ή όπου θέλεις
-      return;
-    }
-    router.replace('/auth/login');
-  }, [sp, router]);
-
-  return <p className="p-4 text-sm">Completing sign-in…</p>;
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading…</div>}>
+      <SocialCallbackClient />
+    </Suspense>
+  );
 }
+

@@ -1,13 +1,13 @@
-import Header from "@/components/Header";
-import FancyAuthShell from "@/components/FancyAuthShell";
+import { Suspense } from "react";
+import RegisterClient from "./RegisterClient";
+
+export const dynamic = "force-dynamic";
 
 export default function Page() {
   return (
-    <>
-      <Header />
-      <main className="min-h-[calc(100vh-64px)] bg-[#ecf0f3] flex items-center justify-center px-4 py-10">
-        <FancyAuthShell defaultSide="signup" />
-      </main>
-    </>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading…</div>}>
+      <RegisterClient />
+    </Suspense>
   );
 }
+

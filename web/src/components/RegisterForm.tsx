@@ -59,13 +59,23 @@ export default function RegisterForm() {
       await api.post("/auth/register", payload);
 
       if (typeof window !== "undefined") {
-        // Account language = what they selected on register
-        localStorage.setItem("ui.accountLang", data.uiLanguage);
-        localStorage.setItem("uiAccountLang", data.uiLanguage); // backwards compat
+  // 1) account preferred language
+  localStorage.setItem("preferredLanguage", data.uiLanguage);
 
-        // viewLang = what they want to see right now
-        localStorage.setItem("ui.viewLang", data.uiLanguage);
-      }
+  // 2) backwards compat (ό,τι παλιό διαβάζει αυτό)
+  localStorage.setItem("uiAccountLang", data.uiLanguage);
+
+  // 3) ξεκινά μεταφρασμένο
+  localStorage.setItem("ui.mode", "preferred");
+
+  // 4) cookie που διαβάζει το autoTranslate hook
+  document.cookie = `uiLanguage=${encodeURIComponent(
+    data.uiLanguage
+  )}; path=/; max-age=31536000`;
+
+  // 5) ενημέρωση UI (αν κάποια components ακούνε)
+  window.dispatchEvent(new CustomEvent("uiModeChanged"));
+}
 
       router.push(`/auth/check-email?email=${encodeURIComponent(data.email)}`);
       return;
@@ -292,3 +302,4 @@ export default function RegisterForm() {
     </form>
   );
 }
+

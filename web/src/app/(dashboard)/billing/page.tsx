@@ -1,14 +1,19 @@
-// web/src/app/(dashboard)/billing/page.tsx (server component)
-import UpgradeButton from './UpgradeButton';
+import { Suspense } from "react";
+import BillingClient from "./BillingClient";
 
-// πάρε το userId από το session σου
-export default async function BillingPage() {
-  const userId = 'USER_ID_FROM_SESSION'; // βάλε το δικό σου
+export const dynamic = "force-dynamic";
+
+export default function Page() {
   return (
-    <main className="p-6">
-      <h1 className="text-xl font-semibold mb-4">Αναβάθμιση σε VIP</h1>
-      <p className="mb-3">10€/μήνα (auto-localized στο ταμείο)</p>
-      <UpgradeButton userId={userId} />
-    </main>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          Loading…
+        </div>
+      }
+    >
+      <BillingClient />
+    </Suspense>
   );
 }
+

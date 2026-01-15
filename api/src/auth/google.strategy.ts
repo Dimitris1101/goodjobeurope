@@ -5,25 +5,40 @@ import { Strategy, Profile } from 'passport-google-oauth20';
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   constructor() {
-  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_CALLBACK_URL) {
-    // βοηθάει πολύ αν κάτι λείπει
-    // ΜΗΝ αφήσεις credentials στα logs σε production
-    console.error('[GoogleStrategy] Missing envs:', {
-      hasId: !!process.env.GOOGLE_CLIENT_ID,
-      hasSecret: !!process.env.GOOGLE_CLIENT_SECRET,
-      hasCallback: !!process.env.GOOGLE_CALLBACK_URL,
-    });
+    const clientID = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const callbackURL = process.env.GOOGLE_CALLBACK_URL;
+
+    const disabled = !clientID || !clientSecret || !callbackURL;
+
+    // ✅ super MUST be first statement
+    super(
+      disabled
+        ? {
+            clientID: 'DISABLED',
+            clientSecret: 'DISABLED',
+            callbackURL: 'http://localhost:4000/auth/google/callback',
+          }
+        : {
+            clientID,
+            clientSecret,
+            callbackURL,
+          },
+    );
+
+    if (disabled) {
+      console.warn(
+        '[GoogleStrategy] Google OAuth DISABLED – missing GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_CALLBACK_URL',
+      );
+    }
   }
 
-  super({
-    clientID: process.env.GOOGLE_CLIENT_ID!,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL!,
-    // ΜΗΝ βάζεις scope εδώ, το περνάμε στο guard
-  });
-}
-
-  validate(_accessToken: string, _refreshToken: string, profile: Profile, done: Function) {
+  validate(
+    _accessToken: string,
+    _refreshToken: string,
+    profile: Profile,
+    done: Function,
+  ) {
     done(null, profile);
   }
 }

@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import FullScreenAd from "@/components/FullScreenAd";
 import { useAdManager } from "@/lib/useAdManager";
 import type { PlanName } from "@/types/plan";
+import UpgradeBanner from "@/components/UpgradeBanner";
 
 type Props = { plan: PlanName; children: React.ReactNode; debug?: boolean; };
 
@@ -11,6 +12,19 @@ export default function AdProvider({ plan, children, debug }: Props) {
   const pathname = usePathname();
   const { visible, showAd, closeAd, canShow, reset, policy, intervalSec } = useAdManager(plan);
   const [forceOpen, setForceOpen] = useState(false);
+
+useEffect(() => {
+  console.log("AdProvider mounted", { plan, pathname });
+}, []);
+
+
+
+useEffect(() => {
+  console.log("Ad state", { visible, forceOpen, policy, intervalSec });
+}, [visible, forceOpen, policy, intervalSec]);
+
+
+
 
   // 1) Πρώτη εμφάνιση ~2.5s μετά το mount
   useEffect(() => {
@@ -73,17 +87,16 @@ export default function AdProvider({ plan, children, debug }: Props) {
     <>
       {children}
       {shouldShow && (
-        <FullScreenAd onClose={handleClose}>
-          <div className="flex h-full w-full items-center justify-center bg-gray-100">
-            <div className="p-6 text-center">
-              <div className="text-lg font-semibold">Διαφήμιση (modal)</div>
-              <p className="mt-2 text-sm text-gray-600">
-                Το GOODJOBEUROPE παραμένει δωρεάν χάρη στις διαφημίσεις 💙
-              </p>
-            </div>
-          </div>
-        </FullScreenAd>
-      )}
+  <FullScreenAd onClose={handleClose}>
+    <div className="w-full p-3 sm:p-6">
+<UpgradeBanner
+  planLabel={plan}
+  subtitle="Go ad-free, get higher visibility, and connect faster with the right people."
+  primaryHref="/onboarding/plan"
+    />
+    </div>
+  </FullScreenAd>
+)}
     </>
   );
 }
