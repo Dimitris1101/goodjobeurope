@@ -45,3 +45,8 @@ web/public/ad*.jpg
 # optional: ignore random public images if you don't want them tracked
 # web/public/*.jpg
 # web/public/*.png
+
+
+# local backups
+api/src.__backup_before_media_fix/
+web/.__backup_before_media_fix/
