@@ -20,7 +20,7 @@ type Props = {
     createdAt: string;
   }) => void;
 
-  onWatchVideo: (candidateId: number) => void | Promise<void>; // ✅ ΝΕΟ
+  onWatchVideo?: (candidateId: number) => void | Promise<void>;
 };
 
 // Γραμμή από το /company/matchups?jobId=...
